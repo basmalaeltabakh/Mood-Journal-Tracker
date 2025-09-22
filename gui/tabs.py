@@ -153,6 +153,9 @@ class ViewEntriesTab:
         ttk.Button(button_frame, text="Refresh", command=self.refresh_entries).pack(side=tk.LEFT, padx=5)
         ttk.Button(button_frame, text="Delete Selected", command=self.delete_entry).pack(side=tk.LEFT, padx=5)
         ttk.Button(button_frame, text="Export to CSV", command=self.export_to_csv).pack(side=tk.LEFT, padx=5)
+        
+        # Initial refresh
+        self.refresh_entries()
     
     def refresh_entries(self, filters=None):
         """Refresh the entries list"""
@@ -165,7 +168,21 @@ class ViewEntriesTab:
             if filters is None:
                 filters = self.filter_frame.get_filters()
             
-            filtered_data = self.data_manager.get_entries(filters)
+            # Apply simple filtering (you can enhance this)
+            filtered_data = []
+            for entry in self.data_manager.data:
+                include = True
+                
+                # Date filtering
+                if filters['start_date'] and entry['date'] < filters['start_date']:
+                    include = False
+                if filters['end_date'] and entry['date'] > filters['end_date']:
+                    include = False
+                if filters['mood'] != 'All' and entry['mood'] != filters['mood']:
+                    include = False
+                
+                if include:
+                    filtered_data.append(entry)
             
             # Add entries to treeview
             for entry in filtered_data:
@@ -201,13 +218,20 @@ class ViewEntriesTab:
                 return
             
             if messagebox.askyesno("Confirm Delete", "Are you sure you want to delete the selected entry?"):
-                index = self.entries_tree.index(selection[0])
-                deleted_entry = self.data_manager.delete_entry(index)
+                # Find the actual index in the data manager
+                selected_item = selection[0]
+                item_values = self.entries_tree.item(selected_item, 'values')
+                date, mood, _ = item_values
                 
-                if deleted_entry:
-                    self.refresh_entries()
-                    messagebox.showinfo("Success", "Entry deleted successfully")
-                    self.status_var.set(f"Deleted entry from {deleted_entry['date']}")
+                # Find the entry in the data
+                for i, entry in enumerate(self.data_manager.data):
+                    if entry['date'] == date and entry['mood'] == mood:
+                        deleted_entry = self.data_manager.delete_entry(i)
+                        if deleted_entry:
+                            self.refresh_entries()
+                            messagebox.showinfo("Success", "Entry deleted successfully")
+                            self.status_var.set(f"Deleted entry from {deleted_entry['date']}")
+                        break
                     
         except Exception as e:
             messagebox.showerror("Error", f"Failed to delete entry: {str(e)}")
@@ -220,7 +244,7 @@ class ViewEntriesTab:
                 if not filename.endswith('.csv'):
                     filename += '.csv'
                 
-                with open(filename, 'w') as file:
+                with open(filename, 'w', encoding='utf-8') as file:
                     file.write("Date,Mood,Notes\n")
                     for entry in self.data_manager.data:
                         notes = entry.get('notes', '').replace('"', '""')
@@ -236,5 +260,164 @@ class ViewEntriesTab:
         """Get the tab widget"""
         return self.tab
 
-# Additional tab classes (ReportsTab, SettingsTab) would follow similar patterns
-# Due to length constraints, I've shown the pattern for the first two tabs
+class ReportsTab:
+    """Reports tab implementation"""
+    
+    def __init__(self, parent, data_manager, report_generator, status_var):
+        self.parent = parent
+        self.data_manager = data_manager
+        self.report_generator = report_generator
+        self.status_var = status_var
+        self.current_canvas = None
+        self.create_tab()
+    
+    def create_tab(self):
+        """Create the tab contents"""
+        self.tab = ttk.Frame(self.parent)
+        
+        # Report selection
+        report_frame = ttk.LabelFrame(self.tab, text="Report Options", padding=10)
+        report_frame.pack(fill='x', padx=10, pady=5)
+        
+        self.report_var = tk.StringVar(value="summary")
+        
+        ttk.Radiobutton(report_frame, text="Mood Frequency (Bar Chart)", 
+                       variable=self.report_var, value="summary").grid(row=0, column=0, sticky=tk.W, padx=5)
+        ttk.Radiobutton(report_frame, text="Mood Timeline (Line Chart)", 
+                       variable=self.report_var, value="timeline").grid(row=0, column=1, sticky=tk.W, padx=5)
+        ttk.Radiobutton(report_frame, text="Weekly Summary", 
+                       variable=self.report_var, value="weekly").grid(row=1, column=0, sticky=tk.W, padx=5)
+        ttk.Radiobutton(report_frame, text="Monthly Summary", 
+                       variable=self.report_var, value="monthly").grid(row=1, column=1, sticky=tk.W, padx=5)
+        
+        ttk.Button(report_frame, text="Generate Report", command=self.generate_report).grid(row=0, column=2, rowspan=2, padx=10)
+        
+        # Report display area
+        self.report_frame = ttk.Frame(self.tab)
+        self.report_frame.pack(fill='both', expand=True, padx=10, pady=5)
+    
+    def generate_report(self):
+        """Generate the selected report"""
+        try:
+            # Clear previous report
+            for widget in self.report_frame.winfo_children():
+                widget.destroy()
+            
+            if not self.data_manager.data:
+                messagebox.showwarning("No Data", "No journal entries available for reporting")
+                return
+            
+            report_type = self.report_var.get()
+            
+            if report_type == "summary":
+                self.report_generator.generate_summary_report(self.report_frame)
+            elif report_type == "timeline":
+                self.report_generator.generate_timeline_report(self.report_frame)
+            elif report_type == "weekly":
+                report_text = self.report_generator.generate_weekly_report_text()
+                self.report_generator.generate_text_report(self.report_frame, report_text)
+            elif report_type == "monthly":
+                report_text = self.report_generator.generate_monthly_report_text()
+                self.report_generator.generate_text_report(self.report_frame, report_text)
+                
+            self.status_var.set(f"Generated {report_type} report")
+            
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to generate report: {str(e)}")
+    
+    def get_tab(self):
+        """Get the tab widget"""
+        return self.tab
+
+class SettingsTab:
+    """Settings tab implementation"""
+    
+    def __init__(self, parent, data_manager, moods, status_var):
+        self.parent = parent
+        self.data_manager = data_manager
+        self.moods = moods
+        self.status_var = status_var
+        self.create_tab()
+    
+    def create_tab(self):
+        """Create the tab contents"""
+        self.tab = ttk.Frame(self.parent)
+        
+        main_frame = ttk.LabelFrame(self.tab, text="Application Settings", padding=15)
+        main_frame.pack(fill='both', expand=True, padx=10, pady=10)
+        
+        # Data management
+        data_frame = ttk.LabelFrame(main_frame, text="Data Management", padding=10)
+        data_frame.pack(fill='x', pady=5)
+        
+        ttk.Button(data_frame, text="Backup Data", command=self.backup_data).pack(side=tk.LEFT, padx=5)
+        ttk.Button(data_frame, text="Restore Data", command=self.restore_data).pack(side=tk.LEFT, padx=5)
+        ttk.Button(data_frame, text="Clear All Data", command=self.clear_all_data).pack(side=tk.LEFT, padx=5)
+        
+        # Custom moods
+        moods_frame = ttk.LabelFrame(main_frame, text="Custom Moods", padding=10)
+        moods_frame.pack(fill='x', pady=5)
+        
+        ttk.Label(moods_frame, text="Add custom mood:").pack(side=tk.LEFT, padx=5)
+        self.custom_mood_var = tk.StringVar()
+        ttk.Entry(moods_frame, textvariable=self.custom_mood_var, width=15).pack(side=tk.LEFT, padx=5)
+        ttk.Button(moods_frame, text="Add", command=self.add_custom_mood).pack(side=tk.LEFT, padx=5)
+        
+        # About section
+        about_frame = ttk.LabelFrame(main_frame, text="About", padding=10)
+        about_frame.pack(fill='x', pady=5)
+        
+        about_text = "Mood Journal Tracker v1.0\n\nTrack your daily moods and generate reports to understand your emotional patterns."
+        ttk.Label(about_frame, text=about_text, justify=tk.LEFT).pack(anchor=tk.W)
+    
+    def backup_data(self):
+        """Create a backup of the data file"""
+        try:
+            backup_name = self.data_manager.backup_data()
+            messagebox.showinfo("Backup Complete", f"Backup created: {backup_name}")
+            self.status_var.set(f"Backup created: {backup_name}")
+        except Exception as e:
+            messagebox.showerror("Backup Error", f"Failed to create backup: {str(e)}")
+    
+    def restore_data(self):
+        """Restore data from a backup file"""
+        try:
+            filename = filedialog.askopenfilename(
+                title="Select backup file", 
+                filetypes=[("JSON files", "*.json"), ("All files", "*.*")]
+            )
+            if filename:
+                if self.data_manager.restore_data(filename):
+                    messagebox.showinfo("Restore Complete", "Data restored successfully")
+                    self.status_var.set("Data restored from backup")
+                else:
+                    messagebox.showerror("Restore Error", "Failed to restore data")
+                    
+        except Exception as e:
+            messagebox.showerror("Restore Error", f"Failed to restore data: {str(e)}")
+    
+    def clear_all_data(self):
+        """Clear all journal data"""
+        if messagebox.askyesno("Confirm Clear", "Are you sure you want to delete ALL journal entries? This cannot be undone."):
+            if self.data_manager.clear_all_data():
+                messagebox.showinfo("Success", "All data cleared")
+                self.status_var.set("All data cleared")
+            else:
+                messagebox.showerror("Error", "Failed to clear data")
+    
+    def add_custom_mood(self):
+        """Add a custom mood to the available moods list"""
+        custom_mood = self.custom_mood_var.get().strip()
+        if custom_mood and custom_mood not in self.moods:
+            self.moods.append(custom_mood)
+            self.custom_mood_var.set("")
+            messagebox.showinfo("Success", f"Custom mood '{custom_mood}' added")
+            self.status_var.set(f"Custom mood '{custom_mood}' added")
+        elif custom_mood in self.moods:
+            messagebox.showwarning("Duplicate", "This mood already exists")
+        else:
+            messagebox.showwarning("Invalid", "Please enter a valid mood name")
+    
+    def get_tab(self):
+        """Get the tab widget"""
+        return self.tab

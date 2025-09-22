@@ -6,7 +6,7 @@ from tkinter import ttk
 from Configuration.settings import AppConfig
 from modules.data_manager import DataManager
 from utils.report_generator import ReportGenerator
-from gui.tabs import AddEntryTab, ViewEntriesTab
+from gui.tabs import AddEntryTab, ViewEntriesTab, ReportsTab, SettingsTab
 
 class MoodJournalApp:
     """Main application class"""
@@ -61,11 +61,21 @@ class MoodJournalApp:
         )
         self.notebook.add(self.view_entries_tab.get_tab(), text="View Entries")
         
-        # Additional tabs would be added here following the same pattern
+        # Reports Tab
+        self.reports_tab = ReportsTab(
+            self.notebook, self.data_manager, self.report_generator, self.status_var
+        )
+        self.notebook.add(self.reports_tab.get_tab(), text="Reports")
+        
+        # Settings Tab
+        self.settings_tab = SettingsTab(
+            self.notebook, self.data_manager, self.moods, self.status_var
+        )
+        self.notebook.add(self.settings_tab.get_tab(), text="Settings")
     
     def refresh_ui(self):
         """Refresh the UI with current data"""
-        # Refresh entries list if the view entries tab is active
+        # Refresh entries list if the view entries tab exists
         if hasattr(self, 'view_entries_tab'):
             self.view_entries_tab.refresh_entries()
         

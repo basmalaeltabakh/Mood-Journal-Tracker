@@ -3,6 +3,7 @@ Report generation utilities
 """
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+import tkinter as tk
 from datetime import datetime
 from Configuration.settings import AppConfig
 
@@ -39,10 +40,14 @@ class ReportGenerator:
         # Embed in Tkinter
         canvas = FigureCanvasTkAgg(fig, parent_frame)
         canvas.draw()
+        canvas.get_tk_widget().pack(fill='both', expand=True)
         return canvas
     
     def generate_timeline_report(self, parent_frame):
         """Generate mood timeline chart"""
+        if not self.data_manager.data:
+            return None
+            
         # Sort data by date
         sorted_data = sorted(self.data_manager.data, key=lambda x: x['date'])
         
@@ -66,24 +71,31 @@ class ReportGenerator:
         
         canvas = FigureCanvasTkAgg(fig, parent_frame)
         canvas.draw()
+        canvas.get_tk_widget().pack(fill='both', expand=True)
         return canvas
     
     def generate_weekly_report_text(self):
         """Generate weekly summary report text"""
         report_text = "Weekly Summary Report\n\n"
         
+        if not self.data_manager.data:
+            return report_text + "No data available."
+        
         # Group by week and count moods
         weekly_data = {}
         for entry in self.data_manager.data:
-            date = datetime.strptime(entry['date'], AppConfig.DATE_FORMAT)
-            year, week, _ = date.isocalendar()
-            week_key = f"{year}-W{week:02d}"
-            
-            if week_key not in weekly_data:
-                weekly_data[week_key] = {}
-            
-            mood = entry['mood']
-            weekly_data[week_key][mood] = weekly_data[week_key].get(mood, 0) + 1
+            try:
+                date = datetime.strptime(entry['date'], AppConfig.DATE_FORMAT)
+                year, week, _ = date.isocalendar()
+                week_key = f"{year}-W{week:02d}"
+                
+                if week_key not in weekly_data:
+                    weekly_data[week_key] = {}
+                
+                mood = entry['mood']
+                weekly_data[week_key][mood] = weekly_data[week_key].get(mood, 0) + 1
+            except ValueError:
+                continue
         
         for week, moods in sorted(weekly_data.items()):
             report_text += f"Week {week}:\n"
@@ -97,17 +109,23 @@ class ReportGenerator:
         """Generate monthly summary report text"""
         report_text = "Monthly Summary Report\n\n"
         
+        if not self.data_manager.data:
+            return report_text + "No data available."
+        
         # Group by month and count moods
         monthly_data = {}
         for entry in self.data_manager.data:
-            date = datetime.strptime(entry['date'], AppConfig.DATE_FORMAT)
-            month_key = date.strftime("%Y-%m")
-            
-            if month_key not in monthly_data:
-                monthly_data[month_key] = {}
-            
-            mood = entry['mood']
-            monthly_data[month_key][mood] = monthly_data[month_key].get(mood, 0) + 1
+            try:
+                date = datetime.strptime(entry['date'], AppConfig.DATE_FORMAT)
+                month_key = date.strftime("%Y-%m")
+                
+                if month_key not in monthly_data:
+                    monthly_data[month_key] = {}
+                
+                mood = entry['mood']
+                monthly_data[month_key][mood] = monthly_data[month_key].get(mood, 0) + 1
+            except ValueError:
+                continue
         
         for month, moods in sorted(monthly_data.items()):
             report_text += f"Month {month}:\n"
@@ -116,3 +134,23 @@ class ReportGenerator:
             report_text += "\n"
         
         return report_text
+    
+    def generate_text_report(self, parent_frame, report_text):
+        """Generate a text-based report in the given frame"""
+        # Clear previous content
+        for widget in parent_frame.winfo_children():
+            widget.destroy()
+        
+        # Create text widget with scrollbar
+        text_frame = ttk.Frame(parent_frame)
+        text_frame.pack(fill='both', expand=True)
+        
+        text_widget = tk.Text(text_frame, wrap=tk.WORD, height=20)
+        scrollbar = ttk.Scrollbar(text_frame, orient=tk.VERTICAL, command=text_widget.yview)
+        text_widget.configure(yscrollcommand=scrollbar.set)
+        
+        text_widget.pack(side=tk.LEFT, fill='both', expand=True)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        
+        text_widget.insert(tk.END, report_text)
+        text_widget.config(state=tk.DISABLED)
