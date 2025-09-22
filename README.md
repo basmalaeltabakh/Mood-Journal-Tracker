@@ -1,4 +1,5 @@
-# Mood-Journal-Tracker
+## Mood-Journal-Tracker
+
 ```
 mood_journal/
 ├── main.py
