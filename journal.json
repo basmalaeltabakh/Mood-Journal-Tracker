@@ -3,5 +3,15 @@
         "date": "2025-09-22",
         "mood": "Stressed",
         "notes": ""
+    },
+    {
+        "date": "2025-10-02",
+        "mood": "Happy",
+        "notes": ""
+    },
+    {
+        "date": "2025-10-02",
+        "mood": "Tired",
+        "notes": ""
     }
 ]
