@@ -1,106 +1,193 @@
 """
-Tab definitions for the main application
+Enhanced tab definitions for the main application
 """
 import tkinter as tk
 from tkinter import ttk, messagebox, simpledialog, filedialog
 from datetime import datetime
 from Configuration.settings import AppConfig
 from utils.validators import Validators
-from gui.widgets import DateEntry, FilterFrame
+from gui.widgets import DateEntry, FilterFrame, MoodButton
 
 class AddEntryTab:
-    """Add Entry tab implementation"""
+    """Enhanced Add Entry tab with modern UI"""
     
     def __init__(self, parent, data_manager, moods, status_var):
         self.parent = parent
         self.data_manager = data_manager
         self.moods = moods
         self.status_var = status_var
+        self.selected_mood = None
+        self.mood_buttons = {}
         self.create_tab()
     
     def create_tab(self):
-        """Create the tab contents"""
-        self.tab = ttk.Frame(self.parent)
+        """Create the tab contents with card-based layout"""
+        self.tab = ttk.Frame(self.parent, style='TFrame')
         
-        # Main frame
-        main_frame = ttk.LabelFrame(self.tab, text="New Mood Entry", padding=15)
-        main_frame.pack(fill='both', expand=True, padx=10, pady=10)
+        # Scrollable container for content
+        canvas = tk.Canvas(self.tab, bg=AppConfig.BACKGROUND_COLOR, 
+                          highlightthickness=0)
+        scrollbar = ttk.Scrollbar(self.tab, orient="vertical", command=canvas.yview)
+        scrollable_frame = ttk.Frame(canvas, style='TFrame')
         
-        # Date selection
-        date_frame = ttk.Frame(main_frame)
-        date_frame.pack(fill='x', pady=5)
+        scrollable_frame.bind(
+            "<Configure>",
+            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
+        )
         
-        self.date_entry = DateEntry(date_frame)
+        canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set)
+        
+        # Main content card
+        main_card = ttk.LabelFrame(scrollable_frame, text="Create New Entry", 
+                                  padding=AppConfig.CARD_PADDING)
+        main_card.pack(fill='both', expand=True, padx=15, pady=15)
+        
+        # Date selection section
+        date_section = ttk.Frame(main_card)
+        date_section.pack(fill='x', pady=(0, 20))
+        
+        self.date_entry = DateEntry(date_section)
         self.date_entry.pack(side=tk.LEFT)
         
-        # Mood selection
-        mood_frame = ttk.Frame(main_frame)
-        mood_frame.pack(fill='x', pady=5)
+        # Mood selection section with grid of buttons
+        mood_section = ttk.LabelFrame(main_card, text="How are you feeling?", 
+                                     padding=15)
+        mood_section.pack(fill='x', pady=(0, 20))
         
-        ttk.Label(mood_frame, text="Mood:").pack(side=tk.LEFT)
-        self.mood_var = tk.StringVar()
-        self.mood_combo = ttk.Combobox(mood_frame, textvariable=self.mood_var, 
-                                      values=self.moods, width=15)
-        self.mood_combo.pack(side=tk.LEFT, padx=5)
-        self.mood_combo.set("Happy")
+        # Create mood button grid
+        mood_grid = ttk.Frame(mood_section)
+        mood_grid.pack()
         
-        # Notes section
-        notes_frame = ttk.LabelFrame(main_frame, text="Additional Notes (Optional)", padding=10)
-        notes_frame.pack(fill='both', expand=True, pady=5)
+        cols = 3
+        for idx, mood in enumerate(self.moods):
+            row = idx // cols
+            col = idx % cols
+            
+            mood_btn = MoodButton(mood_grid, mood, self.select_mood)
+            mood_btn.grid(row=row, column=col, padx=5, pady=5)
+            self.mood_buttons[mood] = mood_btn
         
-        self.notes_text = tk.Text(notes_frame, height=8, width=50)
-        self.notes_text.pack(fill='both', expand=True)
+        # Set default mood
+        self.select_mood("Happy")
         
-        # Buttons
-        button_frame = ttk.Frame(main_frame)
-        button_frame.pack(fill='x', pady=10)
+        # Notes section with better styling
+        notes_section = ttk.LabelFrame(main_card, 
+                                      text="What's on your mind? (Optional)",
+                                      padding=15)
+        notes_section.pack(fill='both', expand=True, pady=(0, 20))
         
-        ttk.Button(button_frame, text="Add Entry", command=self.add_entry).pack(side=tk.LEFT, padx=5)
-        ttk.Button(button_frame, text="Clear", command=self.clear_form).pack(side=tk.LEFT, padx=5)
+        # Text widget with custom styling
+        text_frame = ttk.Frame(notes_section)
+        text_frame.pack(fill='both', expand=True)
+        
+        self.notes_text = tk.Text(text_frame, 
+                                 height=8, 
+                                 width=50,
+                                 font=(AppConfig.FONT_FAMILY, AppConfig.FONT_SIZE_NORMAL),
+                                 wrap=tk.WORD,
+                                 relief=tk.FLAT,
+                                 borderwidth=1,
+                                 highlightthickness=1,
+                                 highlightcolor=AppConfig.PRIMARY_COLOR,
+                                 highlightbackground=AppConfig.BORDER_COLOR,
+                                 padx=10,
+                                 pady=10)
+        self.notes_text.pack(side=tk.LEFT, fill='both', expand=True)
+        
+        notes_scrollbar = ttk.Scrollbar(text_frame, command=self.notes_text.yview)
+        self.notes_text.config(yscrollcommand=notes_scrollbar.set)
+        notes_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        
+        # Character counter
+        self.char_count_var = tk.StringVar(value="0 characters")
+        char_label = ttk.Label(notes_section, 
+                              textvariable=self.char_count_var,
+                              style='Secondary.TLabel')
+        char_label.pack(anchor=tk.E, pady=(5, 0))
+        
+        self.notes_text.bind('<KeyRelease>', self.update_char_count)
+        
+        # Action buttons
+        button_frame = ttk.Frame(main_card)
+        button_frame.pack(fill='x', pady=(0, 0))
+        
+        ttk.Button(button_frame, 
+                  text="💾 Save Entry", 
+                  command=self.add_entry,
+                  style='Success.TButton').pack(side=tk.LEFT, padx=(0, 10))
+        
+        ttk.Button(button_frame, 
+                  text="🗑️ Clear", 
+                  command=self.clear_form,
+                  style='Secondary.TButton').pack(side=tk.LEFT)
+        
+        # Pack canvas and scrollbar
+        canvas.pack(side=tk.LEFT, fill='both', expand=True)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+    
+    def select_mood(self, mood):
+        """Handle mood selection"""
+        # Deselect all buttons
+        for btn in self.mood_buttons.values():
+            btn.deselect()
+        
+        # Select clicked button
+        if mood in self.mood_buttons:
+            self.mood_buttons[mood].select()
+            self.selected_mood = mood
+    
+    def update_char_count(self, event=None):
+        """Update character count label"""
+        content = self.notes_text.get("1.0", tk.END).strip()
+        char_count = len(content)
+        self.char_count_var.set(f"{char_count} characters")
     
     def add_entry(self):
-        """Add a new journal entry"""
+        """Add a new journal entry with validation"""
         try:
             date = self.date_entry.get_date()
-            mood = self.mood_var.get().strip()
+            mood = self.selected_mood
             notes = self.notes_text.get("1.0", tk.END).strip()
             
             # Validate input
             if not Validators.validate_date(date):
-                messagebox.showerror("Invalid Date", "Please enter a valid date in YYYY-MM-DD format")
+                messagebox.showerror("Invalid Date", 
+                                   "Please enter a valid date in YYYY-MM-DD format")
                 return
             
             if not mood or mood not in self.moods:
-                messagebox.showerror("Invalid Mood", "Please select a valid mood")
+                messagebox.showerror("Invalid Mood", 
+                                   "Please select a mood")
                 return
             
             # Create and save entry
             entry = {"date": date, "mood": mood, "notes": notes}
             
             if self.data_manager.add_entry(entry):
-                messagebox.showinfo("Success", "Entry added successfully!")
+                messagebox.showinfo("Success! 🎉", 
+                                  "Your entry has been saved successfully!")
                 self.clear_form()
-                self.status_var.set(f"Entry added for {entry['date']}")
+                self.status_var.set(f"✅ Entry added for {entry['date']}")
             else:
-                # Remove the entry if save failed
                 if entry in self.data_manager.data:
                     self.data_manager.data.remove(entry)
-                
+                    
         except Exception as e:
             messagebox.showerror("Error", f"Failed to add entry: {str(e)}")
     
     def clear_form(self):
-        """Clear the form"""
+        """Clear the form to default values"""
         self.date_entry.set_today()
-        self.mood_combo.set("Happy")
+        self.select_mood("Happy")
         self.notes_text.delete("1.0", tk.END)
+        self.update_char_count()
     
     def get_tab(self):
         """Get the tab widget"""
         return self.tab
-
 class ViewEntriesTab:
-    """View Entries tab implementation"""
+    """Enhanced View Entries tab with modern table design"""
     
     def __init__(self, parent, data_manager, moods, status_var):
         self.parent = parent
@@ -110,70 +197,112 @@ class ViewEntriesTab:
         self.create_tab()
     
     def create_tab(self):
-        """Create the tab contents"""
-        self.tab = ttk.Frame(self.parent)
+        """Create the tab contents with improved layout"""
+        self.tab = ttk.Frame(self.parent, style='TFrame')
         
-        # Filter frame
-        self.filter_frame = FilterFrame(self.tab, self.moods, padding=10)
-        self.filter_frame.pack(fill='x', padx=10, pady=5)
+        # Top section with filters
+        top_frame = ttk.Frame(self.tab)
+        top_frame.pack(fill='x', padx=15, pady=(15, 10))
         
-        # Apply/Clear filter buttons
-        filter_button_frame = ttk.Frame(self.tab)
-        filter_button_frame.pack(fill='x', padx=10, pady=5)
+        # Filter card
+        self.filter_frame = FilterFrame(top_frame, self.moods, padding=15)
+        self.filter_frame.pack(fill='x', side=tk.LEFT, expand=True)
         
-        ttk.Button(filter_button_frame, text="Apply Filters", 
-                  command=self.apply_filters).pack(side=tk.LEFT, padx=5)
-        ttk.Button(filter_button_frame, text="Clear Filters", 
-                  command=self.clear_filters).pack(side=tk.LEFT, padx=5)
+        # Filter buttons
+        filter_button_frame = ttk.Frame(top_frame)
+        filter_button_frame.pack(side=tk.RIGHT, padx=(10, 0))
         
-        # Entries list
-        list_frame = ttk.LabelFrame(self.tab, text="Journal Entries", padding=10)
-        list_frame.pack(fill='both', expand=True, padx=10, pady=5)
+        ttk.Button(filter_button_frame, 
+                  text="🔍 Apply", 
+                  command=self.apply_filters,
+                  style='TButton').pack(pady=(0, 5))
         
-        # Treeview for entries
+        ttk.Button(filter_button_frame, 
+                  text="✖️ Clear", 
+                  command=self.clear_filters,
+                  style='Secondary.TButton').pack()
+        
+        # Entries list card
+        list_card = ttk.LabelFrame(self.tab, text="Your Journal Entries", 
+                                  padding=15)
+        list_card.pack(fill='both', expand=True, padx=15, pady=(0, 15))
+        
+        # Treeview with enhanced styling
+        tree_frame = ttk.Frame(list_card)
+        tree_frame.pack(fill='both', expand=True)
+        
         columns = ("Date", "Mood", "Notes")
-        self.entries_tree = ttk.Treeview(list_frame, columns=columns, show="headings", height=15)
+        self.entries_tree = ttk.Treeview(tree_frame, 
+                                        columns=columns, 
+                                        show="headings", 
+                                        selectmode='browse')
         
-        for col in columns:
-            self.entries_tree.heading(col, text=col)
-            self.entries_tree.column(col, width=100)
+        # Configure columns
+        self.entries_tree.heading("Date", text="📅 Date")
+        self.entries_tree.heading("Mood", text="😊 Mood")
+        self.entries_tree.heading("Notes", text="📝 Notes")
         
-        self.entries_tree.column("Notes", width=300)
+        self.entries_tree.column("Date", width=120, anchor=tk.W)
+        self.entries_tree.column("Mood", width=120, anchor=tk.W)
+        self.entries_tree.column("Notes", width=400, anchor=tk.W)
         
-        # Scrollbar for treeview
-        scrollbar = ttk.Scrollbar(list_frame, orient=tk.VERTICAL, command=self.entries_tree.yview)
+        # Scrollbar
+        scrollbar = ttk.Scrollbar(tree_frame, orient=tk.VERTICAL, 
+                                 command=self.entries_tree.yview)
         self.entries_tree.configure(yscrollcommand=scrollbar.set)
+        
         self.entries_tree.pack(side=tk.LEFT, fill='both', expand=True)
         scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
         
-        # Button frame
-        button_frame = ttk.Frame(list_frame)
-        button_frame.pack(fill='x', pady=5)
+        # Add alternating row colors
+        self.entries_tree.tag_configure('oddrow', background='white')
+        self.entries_tree.tag_configure('evenrow', background=AppConfig.BACKGROUND_COLOR)
         
-        ttk.Button(button_frame, text="Refresh", command=self.refresh_entries).pack(side=tk.LEFT, padx=5)
-        ttk.Button(button_frame, text="Delete Selected", command=self.delete_entry).pack(side=tk.LEFT, padx=5)
-        ttk.Button(button_frame, text="Export to CSV", command=self.export_to_csv).pack(side=tk.LEFT, padx=5)
+        # Action buttons
+        button_frame = ttk.Frame(list_card)
+        button_frame.pack(fill='x', pady=(15, 0))
+        
+        ttk.Button(button_frame, 
+                  text="🔄 Refresh", 
+                  command=self.refresh_entries,
+                  style='TButton').pack(side=tk.LEFT, padx=(0, 10))
+        
+        ttk.Button(button_frame, 
+                  text="🗑️ Delete", 
+                  command=self.delete_entry,
+                  style='Warning.TButton').pack(side=tk.LEFT, padx=(0, 10))
+        
+        ttk.Button(button_frame, 
+                  text="📥 Export CSV", 
+                  command=self.export_to_csv,
+                  style='Secondary.TButton').pack(side=tk.LEFT)
+        
+        # Entry count label
+        self.count_var = tk.StringVar(value="0 entries")
+        count_label = ttk.Label(button_frame, 
+                               textvariable=self.count_var,
+                               style='Secondary.TLabel')
+        count_label.pack(side=tk.RIGHT)
         
         # Initial refresh
         self.refresh_entries()
     
     def refresh_entries(self, filters=None):
-        """Refresh the entries list"""
+        """Refresh the entries list with alternating colors"""
         try:
             # Clear existing items
             for item in self.entries_tree.get_children():
                 self.entries_tree.delete(item)
             
-            # Get filtered data
+            # Get filters
             if filters is None:
                 filters = self.filter_frame.get_filters()
             
-            # Apply simple filtering (you can enhance this)
+            # Filter data
             filtered_data = []
             for entry in self.data_manager.data:
                 include = True
                 
-                # Date filtering
                 if filters['start_date'] and entry['date'] < filters['start_date']:
                     include = False
                 if filters['end_date'] and entry['date'] > filters['end_date']:
@@ -184,15 +313,26 @@ class ViewEntriesTab:
                 if include:
                     filtered_data.append(entry)
             
-            # Add entries to treeview
-            for entry in filtered_data:
+            # Sort by date (newest first)
+            filtered_data.sort(key=lambda x: x['date'], reverse=True)
+            
+            # Add entries with alternating colors
+            for idx, entry in enumerate(filtered_data):
                 notes = entry.get('notes', '')
                 if len(notes) > AppConfig.NOTES_PREVIEW_LENGTH:
                     notes = notes[:AppConfig.NOTES_PREVIEW_LENGTH] + "..."
                 
-                self.entries_tree.insert("", tk.END, values=(entry['date'], entry['mood'], notes))
+                # Get mood emoji
+                mood_display = f"{AppConfig.MOOD_EMOJIS.get(entry['mood'], '')} {entry['mood']}"
+                
+                tag = 'evenrow' if idx % 2 == 0 else 'oddrow'
+                self.entries_tree.insert("", tk.END, 
+                                        values=(entry['date'], mood_display, notes),
+                                        tags=(tag,))
             
-            self.status_var.set(f"Displaying {len(filtered_data)} entries")
+            # Update count
+            self.count_var.set(f"{len(filtered_data)} {'entry' if len(filtered_data) == 1 else 'entries'}")
+            self.status_var.set(f"📊 Displaying {len(filtered_data)} entries")
             
         except Exception as e:
             messagebox.showerror("Error", f"Failed to refresh entries: {str(e)}")
@@ -201,36 +341,41 @@ class ViewEntriesTab:
         """Apply filters to the entries list"""
         filters = self.filter_frame.get_filters()
         self.refresh_entries(filters)
-        self.status_var.set("Filters applied")
+        self.status_var.set("🔍 Filters applied")
     
     def clear_filters(self):
         """Clear all filters"""
         self.filter_frame.clear_filters()
         self.refresh_entries()
-        self.status_var.set("Filters cleared")
+        self.status_var.set("✖️ Filters cleared")
     
     def delete_entry(self):
         """Delete the selected entry"""
         try:
             selection = self.entries_tree.selection()
             if not selection:
-                messagebox.showwarning("No Selection", "Please select an entry to delete")
+                messagebox.showwarning("No Selection", 
+                                     "Please select an entry to delete")
                 return
             
-            if messagebox.askyesno("Confirm Delete", "Are you sure you want to delete the selected entry?"):
-                # Find the actual index in the data manager
+            if messagebox.askyesno("Confirm Delete", 
+                                  "Are you sure you want to delete this entry?"):
                 selected_item = selection[0]
                 item_values = self.entries_tree.item(selected_item, 'values')
-                date, mood, _ = item_values
+                date = item_values[0]
+                mood_display = item_values[1]
                 
-                # Find the entry in the data
+                # Extract mood name (remove emoji)
+                mood = mood_display.split(' ', 1)[1] if ' ' in mood_display else mood_display
+                
+                # Find and delete the entry
                 for i, entry in enumerate(self.data_manager.data):
                     if entry['date'] == date and entry['mood'] == mood:
                         deleted_entry = self.data_manager.delete_entry(i)
                         if deleted_entry:
                             self.refresh_entries()
-                            messagebox.showinfo("Success", "Entry deleted successfully")
-                            self.status_var.set(f"Deleted entry from {deleted_entry['date']}")
+                            messagebox.showinfo("Success", "Entry deleted successfully!")
+                            self.status_var.set(f"🗑️ Deleted entry from {deleted_entry['date']}")
                         break
                     
         except Exception as e:
@@ -239,7 +384,8 @@ class ViewEntriesTab:
     def export_to_csv(self):
         """Export data to CSV file"""
         try:
-            filename = simpledialog.askstring("Export CSV", "Enter filename (without extension):")
+            filename = simpledialog.askstring("Export CSV", 
+                                            "Enter filename (without extension):")
             if filename:
                 if not filename.endswith('.csv'):
                     filename += '.csv'
@@ -251,50 +397,93 @@ class ViewEntriesTab:
                         file.write(f'"{entry["date"]}","{entry["mood"]}","{notes}"\n')
                 
                 messagebox.showinfo("Success", f"Data exported to {filename}")
-                self.status_var.set(f"Data exported to {filename}")
+                self.status_var.set(f"📥 Exported to {filename}")
                 
         except Exception as e:
-            messagebox.showerror("Export Error", f"Failed to export data: {str(e)}")
+            messagebox.showerror("Export Error", f"Failed to export: {str(e)}")
     
     def get_tab(self):
         """Get the tab widget"""
-        return self.tab
-
+        return self.tab    
 class ReportsTab:
-    """Reports tab implementation"""
+    """Enhanced Reports tab with modern visualization options"""
     
     def __init__(self, parent, data_manager, report_generator, status_var):
         self.parent = parent
         self.data_manager = data_manager
         self.report_generator = report_generator
         self.status_var = status_var
-        self.current_canvas = None
         self.create_tab()
     
     def create_tab(self):
-        """Create the tab contents"""
-        self.tab = ttk.Frame(self.parent)
+        """Create the tab contents with modern layout"""
+        self.tab = ttk.Frame(self.parent, style='TFrame')
         
-        # Report selection
-        report_frame = ttk.LabelFrame(self.tab, text="Report Options", padding=10)
-        report_frame.pack(fill='x', padx=10, pady=5)
+        # Report options card
+        options_card = ttk.LabelFrame(self.tab, 
+                                     text="📊 Report Options", 
+                                     padding=20)
+        options_card.pack(fill='x', padx=15, pady=15)
         
+        # Report type selection
         self.report_var = tk.StringVar(value="summary")
         
-        ttk.Radiobutton(report_frame, text="Mood Frequency (Bar Chart)", 
-                       variable=self.report_var, value="summary").grid(row=0, column=0, sticky=tk.W, padx=5)
-        ttk.Radiobutton(report_frame, text="Mood Timeline (Line Chart)", 
-                       variable=self.report_var, value="timeline").grid(row=0, column=1, sticky=tk.W, padx=5)
-        ttk.Radiobutton(report_frame, text="Weekly Summary", 
-                       variable=self.report_var, value="weekly").grid(row=1, column=0, sticky=tk.W, padx=5)
-        ttk.Radiobutton(report_frame, text="Monthly Summary", 
-                       variable=self.report_var, value="monthly").grid(row=1, column=1, sticky=tk.W, padx=5)
+        # Create a grid of radio buttons
+        radio_frame = ttk.Frame(options_card)
+        radio_frame.pack(fill='x')
         
-        ttk.Button(report_frame, text="Generate Report", command=self.generate_report).grid(row=0, column=2, rowspan=2, padx=10)
+        reports = [
+            ("summary", "📊 Mood Frequency", "See how often you feel each mood"),
+            ("timeline", "📈 Mood Timeline", "Track your mood changes over time"),
+            ("weekly", "📅 Weekly Summary", "Group entries by week"),
+            ("monthly", "🗓️ Monthly Summary", "Group entries by month")
+        ]
+        
+        for idx, (value, text, desc) in enumerate(reports):
+            row = idx // 2
+            col = idx % 2
+            
+            frame = ttk.Frame(radio_frame)
+            frame.grid(row=row, column=col, sticky=tk.W, padx=10, pady=5)
+            
+            ttk.Radiobutton(frame, 
+                          text=text,
+                          variable=self.report_var, 
+                          value=value).pack(anchor=tk.W)
+            
+            ttk.Label(frame, 
+                     text=desc,
+                     style='Secondary.TLabel').pack(anchor=tk.W, padx=(20, 0))
+        
+        # Generate button
+        btn_frame = ttk.Frame(options_card)
+        btn_frame.pack(fill='x', pady=(15, 0))
+        
+        ttk.Button(btn_frame, 
+                  text="📊 Generate Report", 
+                  command=self.generate_report,
+                  style='Success.TButton').pack(side=tk.LEFT)
+        
+        ttk.Label(btn_frame,
+                 text="Select a report type and click generate",
+                 style='Secondary.TLabel').pack(side=tk.LEFT, padx=(15, 0))
         
         # Report display area
-        self.report_frame = ttk.Frame(self.tab)
-        self.report_frame.pack(fill='both', expand=True, padx=10, pady=5)
+        display_card = ttk.LabelFrame(self.tab, 
+                                     text="Report Visualization", 
+                                     padding=15)
+        display_card.pack(fill='both', expand=True, padx=15, pady=(0, 15))
+        
+        self.report_frame = ttk.Frame(display_card)
+        self.report_frame.pack(fill='both', expand=True)
+        
+        # Placeholder message
+        placeholder = ttk.Label(self.report_frame,
+                               text="📊\n\nSelect a report type and click 'Generate Report'\nto view your mood insights",
+                               style='Secondary.TLabel',
+                               font=(AppConfig.FONT_FAMILY, AppConfig.FONT_SIZE_LARGE),
+                               justify=tk.CENTER)
+        placeholder.pack(expand=True)
     
     def generate_report(self):
         """Generate the selected report"""
@@ -304,7 +493,9 @@ class ReportsTab:
                 widget.destroy()
             
             if not self.data_manager.data:
-                messagebox.showwarning("No Data", "No journal entries available for reporting")
+                messagebox.showwarning("No Data", 
+                                     "No journal entries available for reporting.\n\n" +
+                                     "Add some entries first!")
                 return
             
             report_type = self.report_var.get()
@@ -319,8 +510,8 @@ class ReportsTab:
             elif report_type == "monthly":
                 report_text = self.report_generator.generate_monthly_report_text()
                 self.report_generator.generate_text_report(self.report_frame, report_text)
-                
-            self.status_var.set(f"Generated {report_type} report")
+            
+            self.status_var.set(f"📊 Generated {report_type} report")
             
         except Exception as e:
             messagebox.showerror("Error", f"Failed to generate report: {str(e)}")
@@ -328,9 +519,8 @@ class ReportsTab:
     def get_tab(self):
         """Get the tab widget"""
         return self.tab
-
 class SettingsTab:
-    """Settings tab implementation"""
+    """Enhanced Settings tab with modern card layout"""
     
     def __init__(self, parent, data_manager, moods, status_var):
         self.parent = parent
@@ -341,43 +531,135 @@ class SettingsTab:
     
     def create_tab(self):
         """Create the tab contents"""
-        self.tab = ttk.Frame(self.parent)
+        self.tab = ttk.Frame(self.parent, style='TFrame')
         
-        main_frame = ttk.LabelFrame(self.tab, text="Application Settings", padding=15)
-        main_frame.pack(fill='both', expand=True, padx=10, pady=10)
+        # Scrollable container
+        canvas = tk.Canvas(self.tab, bg=AppConfig.BACKGROUND_COLOR, 
+                          highlightthickness=0)
+        scrollbar = ttk.Scrollbar(self.tab, orient="vertical", command=canvas.yview)
+        scrollable_frame = ttk.Frame(canvas, style='TFrame')
         
-        # Data management
-        data_frame = ttk.LabelFrame(main_frame, text="Data Management", padding=10)
-        data_frame.pack(fill='x', pady=5)
+        scrollable_frame.bind(
+            "<Configure>",
+            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
+        )
         
-        ttk.Button(data_frame, text="Backup Data", command=self.backup_data).pack(side=tk.LEFT, padx=5)
-        ttk.Button(data_frame, text="Restore Data", command=self.restore_data).pack(side=tk.LEFT, padx=5)
-        ttk.Button(data_frame, text="Clear All Data", command=self.clear_all_data).pack(side=tk.LEFT, padx=5)
+        canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set)
         
-        # Custom moods
-        moods_frame = ttk.LabelFrame(main_frame, text="Custom Moods", padding=10)
-        moods_frame.pack(fill='x', pady=5)
+        # Data management card
+        data_card = ttk.LabelFrame(scrollable_frame, 
+                                  text="💾 Data Management", 
+                                  padding=20)
+        data_card.pack(fill='x', padx=15, pady=(15, 10))
         
-        ttk.Label(moods_frame, text="Add custom mood:").pack(side=tk.LEFT, padx=5)
+        ttk.Label(data_card,
+                 text="Backup and manage your journal data",
+                 style='Secondary.TLabel').pack(anchor=tk.W, pady=(0, 15))
+        
+        button_container = ttk.Frame(data_card)
+        button_container.pack(fill='x')
+        
+        ttk.Button(button_container, 
+                  text="💾 Backup Data", 
+                  command=self.backup_data,
+                  style='TButton').pack(side=tk.LEFT, padx=(0, 10))
+        
+        ttk.Button(button_container, 
+                  text="📥 Restore Data", 
+                  command=self.restore_data,
+                  style='Secondary.TButton').pack(side=tk.LEFT, padx=(0, 10))
+        
+        ttk.Button(button_container, 
+                  text="🗑️ Clear All", 
+                  command=self.clear_all_data,
+                  style='Warning.TButton').pack(side=tk.LEFT)
+        
+        # Custom moods card
+        moods_card = ttk.LabelFrame(scrollable_frame, 
+                                   text="😊 Custom Moods", 
+                                   padding=20)
+        moods_card.pack(fill='x', padx=15, pady=(0, 10))
+        
+        ttk.Label(moods_card,
+                 text="Add your own mood options",
+                 style='Secondary.TLabel').pack(anchor=tk.W, pady=(0, 15))
+        
+        input_frame = ttk.Frame(moods_card)
+        input_frame.pack(fill='x')
+        
+        ttk.Label(input_frame, text="New mood:").pack(side=tk.LEFT, padx=(0, 10))
+        
         self.custom_mood_var = tk.StringVar()
-        ttk.Entry(moods_frame, textvariable=self.custom_mood_var, width=15).pack(side=tk.LEFT, padx=5)
-        ttk.Button(moods_frame, text="Add", command=self.add_custom_mood).pack(side=tk.LEFT, padx=5)
+        mood_entry = ttk.Entry(input_frame, 
+                              textvariable=self.custom_mood_var, 
+                              width=20)
+        mood_entry.pack(side=tk.LEFT, padx=(0, 10))
         
-        # About section
-        about_frame = ttk.LabelFrame(main_frame, text="About", padding=10)
-        about_frame.pack(fill='x', pady=5)
+        ttk.Button(input_frame, 
+                  text="➕ Add", 
+                  command=self.add_custom_mood,
+                  style='Success.TButton').pack(side=tk.LEFT)
         
-        about_text = "Mood Journal Tracker v1.0\n\nTrack your daily moods and generate reports to understand your emotional patterns."
-        ttk.Label(about_frame, text=about_text, justify=tk.LEFT).pack(anchor=tk.W)
+        # Current moods display
+        current_frame = ttk.Frame(moods_card)
+        current_frame.pack(fill='x', pady=(15, 0))
+        
+        ttk.Label(current_frame, 
+                 text="Current moods:",
+                 style='Secondary.TLabel').pack(anchor=tk.W, pady=(0, 5))
+        
+        moods_text = tk.Text(current_frame, 
+                            height=4, 
+                            wrap=tk.WORD,
+                            font=(AppConfig.FONT_FAMILY, AppConfig.FONT_SIZE_SMALL),
+                            relief=tk.FLAT,
+                            bg=AppConfig.BACKGROUND_COLOR,
+                            fg=AppConfig.TEXT_COLOR)
+        moods_text.pack(fill='x')
+        
+        mood_list = ", ".join([f"{AppConfig.MOOD_EMOJIS.get(m, '')} {m}" 
+                              for m in self.moods])
+        moods_text.insert("1.0", mood_list)
+        moods_text.config(state=tk.DISABLED)
+        
+        # About card
+        about_card = ttk.LabelFrame(scrollable_frame, 
+                                   text="ℹ️ About", 
+                                   padding=20)
+        about_card.pack(fill='x', padx=15, pady=(0, 15))
+        
+        about_text = """Mood Journal Tracker v2.0
+        
+Track your daily moods and generate insightful reports to understand your emotional patterns better.
+
+✨ Features:
+- Modern, intuitive interface
+- Mood tracking with visual indicators
+- Comprehensive reporting
+- Data backup and export
+- Customizable mood options
+
+Made with ❤️ for your mental wellness"""
+        
+        ttk.Label(about_card, 
+                 text=about_text,
+                 justify=tk.LEFT,
+                 style='Secondary.TLabel').pack(anchor=tk.W)
+        
+        canvas.pack(side=tk.LEFT, fill='both', expand=True)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
     
     def backup_data(self):
         """Create a backup of the data file"""
         try:
             backup_name = self.data_manager.backup_data()
-            messagebox.showinfo("Backup Complete", f"Backup created: {backup_name}")
-            self.status_var.set(f"Backup created: {backup_name}")
+            messagebox.showinfo("Backup Complete", 
+                              f"✅ Backup created successfully!\n\n{backup_name}")
+            self.status_var.set(f"💾 Backup created: {backup_name}")
         except Exception as e:
-            messagebox.showerror("Backup Error", f"Failed to create backup: {str(e)}")
+            messagebox.showerror("Backup Error", 
+                               f"Failed to create backup:\n{str(e)}")
     
     def restore_data(self):
         """Restore data from a backup file"""
@@ -388,35 +670,49 @@ class SettingsTab:
             )
             if filename:
                 if self.data_manager.restore_data(filename):
-                    messagebox.showinfo("Restore Complete", "Data restored successfully")
-                    self.status_var.set("Data restored from backup")
+                    messagebox.showinfo("Restore Complete", 
+                                      "✅ Data restored successfully!")
+                    self.status_var.set("📥 Data restored from backup")
                 else:
-                    messagebox.showerror("Restore Error", "Failed to restore data")
+                    messagebox.showerror("Restore Error", 
+                                       "Failed to restore data")
                     
         except Exception as e:
-            messagebox.showerror("Restore Error", f"Failed to restore data: {str(e)}")
+            messagebox.showerror("Restore Error", 
+                               f"Failed to restore data:\n{str(e)}")
     
     def clear_all_data(self):
         """Clear all journal data"""
-        if messagebox.askyesno("Confirm Clear", "Are you sure you want to delete ALL journal entries? This cannot be undone."):
+        if messagebox.askyesno("Confirm Clear", 
+                              "⚠️ Are you sure you want to delete ALL journal entries?\n\n" +
+                              "This action cannot be undone!"):
             if self.data_manager.clear_all_data():
                 messagebox.showinfo("Success", "All data cleared")
-                self.status_var.set("All data cleared")
+                self.status_var.set("🗑️ All data cleared")
             else:
                 messagebox.showerror("Error", "Failed to clear data")
     
     def add_custom_mood(self):
         """Add a custom mood to the available moods list"""
         custom_mood = self.custom_mood_var.get().strip()
-        if custom_mood and custom_mood not in self.moods:
-            self.moods.append(custom_mood)
-            self.custom_mood_var.set("")
-            messagebox.showinfo("Success", f"Custom mood '{custom_mood}' added")
-            self.status_var.set(f"Custom mood '{custom_mood}' added")
-        elif custom_mood in self.moods:
-            messagebox.showwarning("Duplicate", "This mood already exists")
-        else:
-            messagebox.showwarning("Invalid", "Please enter a valid mood name")
+        
+        if not custom_mood:
+            messagebox.showwarning("Invalid", "Please enter a mood name")
+            return
+            
+        if custom_mood in self.moods:
+            messagebox.showwarning("Duplicate", 
+                                 "This mood already exists")
+            return
+        
+        self.moods.append(custom_mood)
+        self.custom_mood_var.set("")
+        messagebox.showinfo("Success", 
+                          f"✅ Custom mood '{custom_mood}' added successfully!")
+        self.status_var.set(f"➕ Added custom mood: {custom_mood}")
+        
+        # Refresh the mood display
+        self.create_tab()
     
     def get_tab(self):
         """Get the tab widget"""

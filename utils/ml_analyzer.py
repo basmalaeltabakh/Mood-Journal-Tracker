@@ -1,7 +1,6 @@
 """
 ML Analyzer for sentiment analysis and insights
 """
-from textblob import TextBlob
 from Configuration.settings import AppConfig
 
 class MLAnalyzer:
@@ -11,15 +10,22 @@ class MLAnalyzer:
         pass
     
     def analyze_sentiment(self, notes):
-        """Analyze sentiment of notes text using TextBlob"""
+        """Analyze sentiment of notes text"""
         try:
             if not notes.strip():
                 return AppConfig.NEUTRAL_SENTIMENT, 0.0  # Neutral if no notes
             
-            blob = TextBlob(notes)
-            polarity = blob.sentiment.polarity  # -1.0 to +1.0
-            subjectivity = blob.sentiment.subjectivity  # 0.0 to 1.0
-            return polarity, subjectivity
+            # Optional: Use TextBlob if available
+            try:
+                from textblob import TextBlob
+                blob = TextBlob(notes)
+                polarity = blob.sentiment.polarity  # -1.0 to +1.0
+                subjectivity = blob.sentiment.subjectivity  # 0.0 to 1.0
+                return polarity, subjectivity
+            except ImportError:
+                # If TextBlob not installed, return neutral
+                return AppConfig.NEUTRAL_SENTIMENT, 0.0
+                
         except Exception as e:
             print(f"Sentiment analysis error: {e}")
             return AppConfig.NEUTRAL_SENTIMENT, 0.0
